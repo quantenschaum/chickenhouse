@@ -11,7 +11,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
-// created by Adam, software@louisenhof2.de, 2015
+// created by Adam, chickenhouse@louisenhof2.de, 2015
     
 #include <avr/wdt.h>
 #include <EEPROM.h>
