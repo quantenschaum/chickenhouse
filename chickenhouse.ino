@@ -20,11 +20,12 @@
 #define TIME_ADJUST 3600000ul // timeout in ms after which the time is pulled from the net
 #define WATCHDOG WDTO_8S // watchdog timeout (*)
 #define USEDHT DHT22 // type of DHT sensor (*)
-#define FREEMEM // show free memory in (*)
+//#define FREEMEM // show free memory in (*)
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}
 #define IP_ADDRESS ip(192, 168, 222, 201)
+#define USE_SERIAL // enable serial communication (*)
 
 // disable reset on open tty
 // stty -F /dev/ttyUSB0 115200 cs8 cread clocal -hupcl

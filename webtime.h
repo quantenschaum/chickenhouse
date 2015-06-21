@@ -84,9 +84,7 @@ void adjustTime() {
   unsigned long tunix = 0;
   tunix = webUnixTime(client);
   if (!tunix) {
-    tset += 300000;
-    if (millis() - tset > 3 * TIME_ADJUST)
-      toffset = 0;
+    tset += 300000; // try again if 5 minutes
   } else {
     tset = millis();
     toffset = tunix - tset / 1000;
