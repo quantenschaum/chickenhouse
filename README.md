@@ -11,4 +11,11 @@ Additionally some extra sensors like a temperature and/or humidity sensors may b
 and there are spare relais channels, that can be used to switch other devices like light 
 or a heater. So, the door controller can also serve as a weather monitor.
 
+## hardware
 
+## compile
+To compile and upload the programm to the arduino, I use the [arduino IDE]()
+
+## libraries
+This code depends on the following libraries, which are not
+ * 

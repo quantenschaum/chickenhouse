@@ -25,7 +25,7 @@
 
 #define WEBTIME
 //#define ONEWIRE
-#define USEDHT
+#define USEDHT DHT22
 #define TIME_ADJUST 3600000ul
 #define FREEMEM
 #define BUFLEN 32
@@ -52,10 +52,16 @@
 #define CLOSE -1
 
 
-// disable reset on open
+// disable reset on open tty
 // stty -F /dev/ttyUSB0 115200 cs8 cread clocal -hupcl
 
-// use the analog pin to operate the relais
+// IO pins
+// 11, 12, 13 are used by SPI
+// 10 is used as CS for the ethernet shield
+// usable digital pins: 0 1 2 3 4 5 6 7 8 9 (0 1 if no Serial is used)
+// usable  analog pins: 0 1 2 3 4 5 (6 7 on Nano)
+
+// outputs to operate the relais
 #define UP           A0
 #define DOWN         A1
 #define LIGHT        A2
@@ -63,7 +69,7 @@
 #define EXTRA1       A4
 #define EXTRA2       A5
 
-// analog input
+// analog inputs
 #define BRIGHTNESS   A6
 #define EXTRA3       A7
 
@@ -96,7 +102,7 @@ float temp2 = NAN;
 #endif
 
 #if defined(USEDHT)
-DHT dht(DHTPIN, DHT11);
+DHT dht(DHTPIN, USEDHT);
 float temp = NAN, humi = NAN;
 #endif
 
