@@ -12,45 +12,17 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 // created by Adam, chickenhouse@louisenhof2.de, 2015
-    
-#include <avr/wdt.h>
-#include <EEPROM.h>
 
-#include <SPI.h>
-#include <Ethernet.h>
-//#include <EthernetDHCP.h>
-//#define WEBDUINO_SERIAL_DEBUGGING 1
-#include <WebServer.h>
-#include <Streaming.h>
-
-#define WEBTIME
+// configuration
+//#define WEBTIME "nas"
+#define WATCHDOG WDTO_8S
 //#define ONEWIRE
 #define USEDHT DHT22
 #define TIME_ADJUST 3600000ul
 #define FREEMEM
 #define BUFLEN 32
 #define NAME_VALUE_LEN 16
-
-#if defined(FREEMEM)
-#include <MemoryFree.h>
-#endif
-
-#if defined(ONEWIRE)
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#endif
-
-#if defined(USEDHT)
-#include <DHT.h>
-#endif
-
-#define UNDEFINED 0
-#define DAY 1
-#define NIGHT -1
-#define OPEN 1
-#define STOP 0
-#define CLOSE -1
-
+#define MAC_ADDRESS { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }
 
 // disable reset on open tty
 // stty -F /dev/ttyUSB0 115200 cs8 cread clocal -hupcl
@@ -83,17 +55,60 @@
 #define ONE_WIRE_BUS 4
 #define DHTPIN       3
 
-#define S 1000ul
 
-byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
-};
+// constants
+#define UNDEFINED 0
+#define DAY 1
+#define NIGHT -1
+#define OPEN 1
+#define STOP 0
+#define CLOSE -1
+#define SEC 1000ul
+
+
+// includes
+#include <SPI.h>
+#include <Ethernet.h>
+//#include <EthernetDHCP.h>
+//#define WEBDUINO_SERIAL_DEBUGGING 1
+#include <WebServer.h>
+#include <Streaming.h>
+#include <EEPROM.h>
+#include "eeprom.h"
+
+#if defined(WEBTIME)
+#include "webtime.h"
+#endif
+
+#if defined(WATCHDOG)
+#include <avr/wdt.h>
+#endif
+
+#if defined(FREEMEM)
+#include <MemoryFree.h>
+#endif
+
+#if defined(ONEWIRE)
+#include <OneWire.h>
+#include <DallasTemperature.h>
+#endif
+
+#if defined(USEDHT)
+#include <DHT.h>
+#endif
+
+
+byte mac[] = MAC_ADDRESS;
 
 IPAddress ip(192, 168, 222, 201);
 
 WebServer webserver("", 80);
 
 unsigned long timer = 0;
+
+#if defined(WEBTIME)
+float day_hh, night_hh;
+#endif
 
 #if defined(ONEWIRE)
 OneWire oneWire(ONE_WIRE_BUS);
@@ -115,146 +130,7 @@ boolean locked = 1;
 void(* softReset) (void) = 0; //declare reset function at address 0
 
 
-void eeread(int address, int length, void* p) {
-  byte* b = (byte*)p;
-  for (int i = 0; i < length; i++) {
-    *b++ = EEPROM.read(address + i);
-  }
-}
 
-void eewrite(int address, int length, void* p) {
-  byte* b = (byte*)p;
-  for (int i = 0; i < length; i++) {
-    EEPROM.write(address + i, *b++);
-  }
-}
-
-void write_int(int address, int &value) {
-  eewrite(address, sizeof(value), &value);
-}
-
-int read_int(int address) {
-  int value;
-  eeread(address, sizeof(value), &value);
-  return value;
-}
-
-void write_float(int address, float &value) {
-  eewrite(address, sizeof(value), &value);
-}
-
-float read_float(int address) {
-  float value;
-  eeread(address, sizeof(value), &value);
-  return value;
-}
-
-#if defined(WEBTIME)
-float day_hh, night_hh;
-
-unsigned long webUnixTime(Client &client) {
-  unsigned long time = 0;
-
-  // Just choose any reasonably busy web server, the load is really low
-  if (client.connect("nas", 80))  {
-    // Make an HTTP 1.1 request which is missing a Host: header
-    // compliant servers are required to answer with an error that includes
-    // a Date: header.
-    client.print(F("GET / HTTP/1.1 \r\n\r\n"));
-
-    char buf[5];			// temporary buffer for characters
-    client.setTimeout(5000);
-    if (client.find("\r\nDate: ") // look for Date: header
-        && client.readBytes(buf, 5) == 5) // discard
-    {
-      unsigned day = client.parseInt();	   // day
-      client.readBytes(buf, 1);	   // discard
-      client.readBytes(buf, 3);	   // month
-      int year = client.parseInt();	   // year
-      byte hour = client.parseInt();   // hour
-      byte minute = client.parseInt(); // minute
-      byte second = client.parseInt(); // second
-
-      int daysInPrevMonths;
-      switch (buf[0])
-      {
-        case 'F': daysInPrevMonths =  31; break; // Feb
-        case 'S': daysInPrevMonths = 243; break; // Sep
-        case 'O': daysInPrevMonths = 273; break; // Oct
-        case 'N': daysInPrevMonths = 304; break; // Nov
-        case 'D': daysInPrevMonths = 334; break; // Dec
-        default:
-          if (buf[0] == 'J' && buf[1] == 'a')
-            daysInPrevMonths = 0;		// Jan
-          else if (buf[0] == 'A' && buf[1] == 'p')
-            daysInPrevMonths = 90;		// Apr
-          else switch (buf[2])
-            {
-              case 'r': daysInPrevMonths =  59; break; // Mar
-              case 'y': daysInPrevMonths = 120; break; // May
-              case 'n': daysInPrevMonths = 151; break; // Jun
-              case 'l': daysInPrevMonths = 181; break; // Jul
-              default: // add a default label here to avoid compiler warning
-              case 'g': daysInPrevMonths = 212; break; // Aug
-            }
-      }
-
-      // This code will not work after February 2100
-      // because it does not account for 2100 not being a leap year and because
-      // we use the day variable as accumulator, which would overflow in 2149
-      day += (year - 1970) * 365;	// days from 1970 to the whole past year
-      day += (year - 1969) >> 2;	// plus one day per leap year
-      day += daysInPrevMonths;	// plus days for previous months this year
-      if (daysInPrevMonths >= 59	// if we are past February
-          && ((year & 3) == 0))	// and this is a leap year
-        day += 1;			// add one day
-      // Remove today, add hours, minutes and seconds this month
-      time = (((day - 1ul) * 24 + hour) * 60 + minute) * 60 + second;
-    }
-  }
-  delay(100);
-  client.flush();
-  client.stop();
-
-  return time;
-}
-
-unsigned long toffset = 0, tset = 0;
-
-void adjustTime() {
-  EthernetClient client;
-  unsigned long tunix = 0;
-  tunix = webUnixTime(client);
-  if (!tunix) {
-    tset += 300000;
-    if (millis() - tset > 3 * TIME_ADJUST)
-      toffset = 0;
-  } else {
-    tset = millis();
-    toffset = tunix - tset / 1000;
-  }
-}
-
-unsigned long unixTime(unsigned long &tms) {
-  return tms / 1000 + toffset;
-}
-
-byte seconds(unsigned long &tms) {
-  return unixTime(tms) % 60;
-}
-
-byte minutes(unsigned long &tms) {
-  return (unixTime(tms) / 60) % 60;
-}
-
-byte hours(unsigned long &tms) {
-  return (unixTime(tms) / 3600) % 24;
-}
-
-float fhours(unsigned long &tms) {
-  return hours(tms) + minutes(tms) / 60.0;
-}
-#endif
 
 class State {
   public:
@@ -326,7 +202,7 @@ float brightness() {
 
 void printdata(Print &s) {
   unsigned long t = millis();
-  s << F("uptime=")     << (t / S) << endl;
+  s << F("uptime=")     << (t / SEC) << endl;
 #if defined(WEBTIME)
   s << F("time=")    << unixTime(t) << endl;
   s << F("# ")    << hours(t) << F(":")    << minutes(t) << F(" (")    << fhours(t) << F(")") << endl;
@@ -353,8 +229,10 @@ void printdata(Print &s) {
   s << F("extra1=")      << (digitalRead(EXTRA1) == LOW ? 1 : 0) << endl;
   s << F("extra2=")      << (digitalRead(EXTRA2) == LOW ? 1 : 0) << endl;
   s << F("extra3=")      << analogRead(EXTRA3) << endl;
+#if defined(WEBTIME)
   s << F("day_hh=")    << day_hh << endl;
   s << F("night_hh=")    << night_hh << endl;
+#endif
   s << F("day_thres=")    << day_thres << endl;
   s << F("night_thres=")    << night_thres << endl;
   s << F("locked=")    << locked << endl;
@@ -395,8 +273,10 @@ void read_settings() {
   down_timeout = read_int(8);
   temp_delay = read_int(12);
   cold_thres = read_float(14);
+#if defined(WEBTIME)
   day_hh = read_float(18);
   night_hh = read_float(22);
+#endif
 }
 
 
@@ -506,8 +386,10 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
 
 
 void setup() {
+#if defined(WATCHDOG)
   wdt_disable();
-  wdt_enable(WDTO_8S);
+  wdt_enable(WATCHDOG);
+#endif
 
   Serial.begin(115200);
   Serial.setTimeout(500);
@@ -550,7 +432,6 @@ void setup() {
   tset = TIME_ADJUST;
 #endif
 
-  //  if(!Ethernet.begin(mac))
   Ethernet.begin(mac, ip);
   webserver.setDefaultCommand(&rest);
   webserver.begin();
@@ -564,7 +445,7 @@ void loop() {
   toggle.set(digitalRead(TOGGLE) == LOW);
 
   door.set(digitalRead(DOOR) == LOW);
-  if (door.age() > S && door.changed()) {
+  if (door.age() > SEC && door.changed()) {
     light.set(door.get());
     digitalWrite(LIGHT, door.get() ? LOW : HIGH);
   }
@@ -588,11 +469,11 @@ void loop() {
       hatch_state.set(hatch_sensed.get());
     } else {
       unsigned long age = hatch_moving.age();
-      if (moving > STOP && age > up_timeout * S) {
+      if (moving > STOP && age > up_timeout * SEC) {
         hatch(STOP);
         hatch_state.set(UNDEFINED);
       }
-      if (moving < STOP && age > down_timeout * S) {
+      if (moving < STOP && age > down_timeout * SEC) {
         hatch(STOP);
         hatch_state.set(CLOSE);
       }
@@ -606,7 +487,7 @@ void loop() {
 #endif
 
     // read sensors
-    if (t - timer > 5 * S) {
+    if (t - timer > 5 * SEC) {
       timer = t;
 #if defined(ONEWIRE)
       sensors.requestTemperatures();
@@ -619,19 +500,23 @@ void loop() {
 #endif
       bright = 0.9 * bright + 0.1 * brightness();
       locked = 1;
+#if defined(WEBTIME)
       float h = fhours(t);
       boolean daytime = toffset == 0 || (h > day_hh && h < night_hh);
+#else
+      boolean daytime = true;
+#endif
       day.set((bright < night_thres || !daytime) ? NIGHT : (bright > day_thres && daytime) ? DAY : UNDEFINED);
 #if defined(USEDHT)
       cold.set(temp < cold_thres);
-      if (cold.age() > temp_delay * S && cold.changed()) {
+      if (cold.age() > temp_delay * SEC && cold.changed()) {
         heater.set(cold.get());
         digitalWrite(HEATER, cold.get() ? LOW : HIGH);
       }
 #endif
     }
 
-    if (toggle.get() && toggle.age() > S && toggle.changed()) {
+    if (toggle.get() && toggle.age() > SEC && toggle.changed()) {
       if (!locked || (day.is(DAY) && day.age() > day_delay) || hatch_state.is(OPEN)) {
         hatch(hatch_state.is(OPEN) ? CLOSE : OPEN);
       }
@@ -654,7 +539,9 @@ void loop() {
     }
   }
 
+#if defined(WATCHDOG)
   wdt_reset();
+#endif
 }
 
 
