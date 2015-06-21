@@ -12,6 +12,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 // created by Adam, chickenhouse@louisenhof2.de, 2015
+// https://github.com/quantenschaum/chickenhouse
 
 // configuration
 //#define WEBTIME "nas"
@@ -23,6 +24,7 @@
 #define BUFLEN 32
 #define NAME_VALUE_LEN 16
 #define MAC_ADDRESS { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }
+#define IP_ADDRESS ip(192, 168, 222, 201)
 
 // disable reset on open tty
 // stty -F /dev/ttyUSB0 115200 cs8 cread clocal -hupcl
@@ -75,6 +77,7 @@
 #include <Streaming.h>
 #include <EEPROM.h>
 #include "eeprom.h"
+#include "state.h"
 
 #if defined(WEBTIME)
 #include "webtime.h"
@@ -98,9 +101,9 @@
 #endif
 
 
+// global variables
 byte mac[] = MAC_ADDRESS;
-
-IPAddress ip(192, 168, 222, 201);
+IPAddress IP_ADDRESS;
 
 WebServer webserver("", 80);
 
@@ -127,49 +130,14 @@ int day_delay, up_timeout, down_timeout, temp_delay;
 float cold_thres;
 boolean locked = 1;
 
-void(* softReset) (void) = 0; //declare reset function at address 0
-
-
-
-
-class State {
-  public:
-    int state;
-    boolean latch;
-    unsigned long flank;
-    State(int s) {
-      state = s;
-      latch = true;
-      flank = millis();
-    }
-    int get() {
-      return state;
-    }
-    boolean is(int v) {
-      return state == v;
-    }
-    void set(int s) {
-      if (s != state) {
-        state = s;
-        latch = true;
-        flank = millis();
-      }
-    }
-    boolean changed() {
-      boolean l = latch;
-      latch = false;
-      return l;
-    }
-    unsigned long age() {
-      return millis() - flank;
-    }
-};
-
 State toggle(0);
 State day(0);
 State hatch_state(0), hatch_moving(0), hatch_sensed(0);
 State cold(0), heater(0);
 State door(0), light(0);
+
+
+void(* softReset) (void) = 0; //declare reset function at address 0
 
 //  0 = stop, 1 = up, -1 = down
 void hatch(int x) {

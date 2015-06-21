@@ -14,37 +14,35 @@
 // created by Adam, chickenhouse@louisenhof2.de, 2015
 // https://github.com/quantenschaum/chickenhouse
 
-void eeread(int address, int length, void* p) {
-  byte* b = (byte*)p;
-  for (int i = 0; i < length; i++) {
-    *b++ = EEPROM.read(address + i);
-  }
-}
-
-void eewrite(int address, int length, void* p) {
-  byte* b = (byte*)p;
-  for (int i = 0; i < length; i++) {
-    EEPROM.write(address + i, *b++);
-  }
-}
-
-void write_int(int address, int &value) {
-  eewrite(address, sizeof(value), &value);
-}
-
-int read_int(int address) {
-  int value;
-  eeread(address, sizeof(value), &value);
-  return value;
-}
-
-void write_float(int address, float &value) {
-  eewrite(address, sizeof(value), &value);
-}
-
-float read_float(int address) {
-  float value;
-  eeread(address, sizeof(value), &value);
-  return value;
-}
-
+class State {
+  public:
+    int state;
+    boolean latch;
+    unsigned long flank;
+    State(int s) {
+      state = s;
+      latch = true;
+      flank = millis();
+    }
+    int get() {
+      return state;
+    }
+    boolean is(int v) {
+      return state == v;
+    }
+    void set(int s) {
+      if (s != state) {
+        state = s;
+        latch = true;
+        flank = millis();
+      }
+    }
+    boolean changed() {
+      boolean l = latch;
+      latch = false;
+      return l;
+    }
+    unsigned long age() {
+      return millis() - flank;
+    }
+};
