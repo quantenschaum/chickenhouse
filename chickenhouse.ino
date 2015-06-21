@@ -15,14 +15,15 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define WEBTIME "nas" // hostname of http server to pull the time from, comment out to disable
-#define WATCHDOG WDTO_8S // watchdog timeout, comment out to disable
-#define USEDHT DHT22 // type of DHT sensor, comment out to disable
-#define TIME_ADJUST 3600000ul
-#define FREEMEM
-#define BUFLEN 32
-#define NAME_VALUE_LEN 16
-#define MAC_ADDRESS { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED }
+// (*) = comment out to disable the feature
+#define WEBTIME "nas" // hostname of http server to pull the time from (*)
+#define TIME_ADJUST 3600000ul // timeout in ms after which the time is pulled from the net
+#define WATCHDOG WDTO_8S // watchdog timeout (*)
+#define USEDHT DHT22 // type of DHT sensor (*)
+#define FREEMEM // show free memory in (*)
+#define BUFLEN 32 // buffer size for http server
+#define NAME_VALUE_LEN 16 // buffer size for http server query parser
+#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}
 #define IP_ADDRESS ip(192, 168, 222, 201)
 
 // disable reset on open tty
