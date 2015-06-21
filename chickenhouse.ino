@@ -15,10 +15,9 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-//#define WEBTIME "nas"
-#define WATCHDOG WDTO_8S
-//#define ONEWIRE
-#define USEDHT DHT22
+#define WEBTIME "nas" // hostname of http server to pull the time from, comment out to disable
+#define WATCHDOG WDTO_8S // watchdog timeout, comment out to disable
+#define USEDHT DHT22 // type of DHT sensor, comment out to disable
 #define TIME_ADJUST 3600000ul
 #define FREEMEM
 #define BUFLEN 32
@@ -52,9 +51,6 @@
 #define LOWER        7
 #define TOGGLE       6
 #define DOOR         5
-
-// busses
-#define ONE_WIRE_BUS 4
 #define DHTPIN       3
 
 
@@ -91,11 +87,6 @@
 #include <MemoryFree.h>
 #endif
 
-#if defined(ONEWIRE)
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#endif
-
 #if defined(USEDHT)
 #include <DHT.h>
 #endif
@@ -111,12 +102,6 @@ unsigned long timer = 0;
 
 #if defined(WEBTIME)
 float day_hh, night_hh;
-#endif
-
-#if defined(ONEWIRE)
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature sensors(&oneWire);
-float temp2 = NAN;
 #endif
 
 #if defined(USEDHT)
@@ -179,9 +164,6 @@ void printdata(Print &s) {
   s << F("freemem=") << freeMemory() << endl;
 #endif
   s << F("brightness=")    << bright << endl;
-#if defined(ONEWIRE)
-  s << F("temp2=")    << temp2 << endl;
-#endif
 #if defined(USEDHT)
   s << F("temp=")    << temp << endl;
   s << F("humi=")    << humi << endl;
@@ -386,12 +368,6 @@ void setup() {
   day.set(b < night_thres ? NIGHT : b > day_thres ? DAY : UNDEFINED);
   day.changed();
 
-#if defined(ONEWIRE)
-  sensors.begin();
-  sensors.setWaitForConversion(true);
-  sensors.setResolution(10);
-#endif
-
 #if defined(DHT)
   dht.begin();
 #endif
@@ -457,11 +433,6 @@ void loop() {
     // read sensors
     if (t - timer > 5 * SEC) {
       timer = t;
-#if defined(ONEWIRE)
-      sensors.requestTemperatures();
-      temp2 = sensors.getTempCByIndex(0);
-      temp2 = temp2 == -127 ? NAN : temp2;
-#endif
 #if defined(USEDHT)
       temp = dht.readTemperature();
       humi = dht.readHumidity();
