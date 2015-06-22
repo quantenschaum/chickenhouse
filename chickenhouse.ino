@@ -16,12 +16,12 @@
 
 // configuration
 // (*) = comment out to disable the feature
-//#define WEBTIME "nas" // hostname of http server to pull the time from (*)
+#define WEBTIME "nas" // hostname of http server to pull the time from (*)
 #define WEB_PASSWD "YWRtaW46YWRtaW4="
 #define TIME_ADJUST 3600000ul // timeout in ms after which the time is pulled from the net
-//#define WATCHDOG WDTO_8S // watchdog timeout (*)
-//#define USEDHT DHT22 // type of DHT sensor (*)
-//#define FREEMEM // show free memory in (*)
+#define WATCHDOG WDTO_8S // watchdog timeout (*)
+#define USEDHT DHT22 // type of DHT sensor (*)
+#define FREEMEM // show free memory in (*)
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}
@@ -58,6 +58,8 @@
 
 
 // constants
+#define ON LOW
+#define OFF HIGH
 #define UNDEFINED 0
 #define DAY 1
 #define NIGHT -1
@@ -110,38 +112,45 @@ float day_hh, night_hh;
 #if defined(USEDHT)
 DHT dht(DHTPIN, USEDHT);
 float temp = NAN, humi = NAN;
+float cold_thres;
+int temp_delay;
+State cold(0);
 #endif
 
 float bright = 0;
 int day_thres, night_thres;
-int day_delay, up_timeout, down_timeout, temp_delay;
-float cold_thres;
+int day_delay, up_timeout, down_timeout;
 boolean locked = 1;
 
 State toggle(0);
 State day(0);
 State hatch_state(0), hatch_moving(0), hatch_sensed(0);
-State cold(0), heater(0);
-State door(0), light(0);
+State door(0);
 
 
 void(* softReset) (void) = 0; //declare reset function at address 0
 
-//  0 = stop, 1 = up, -1 = down
+void turn(uint8_t pin, uint8_t i) {
+  digitalWrite(pin, i ? ON : OFF);
+}
+
+uint8_t isOn(uint8_t pin) {
+  return (digitalRead(pin) == ON) ? 1 : 0;
+}
+
 void hatch(int x) {
-  digitalWrite(UP, HIGH);
-  digitalWrite(DOWN, HIGH);
-  if (x != 0) {
-    digitalWrite(x > 0 ? UP : DOWN, LOW);
+  turn(UP, 0);
+  turn(DOWN, 0);
+  if (x != STOP) {
+    turn(x > STOP ? UP : DOWN, 1);
   }
   hatch_moving.set(x);
 }
 
 
-//  0 = unknown, 1 = opened, -1 = closed
 int hatch_sense() {
-  boolean lower = digitalRead(LOWER) == LOW;
-  boolean upper = digitalRead(UPPER) == LOW;
+  boolean lower = isOn(LOWER);
+  boolean upper = isOn(UPPER);
   if (upper && !lower)
     return 1;
   else if (lower && !upper)
@@ -158,15 +167,15 @@ float brightness() {
 
 void printdata(Print &s) {
   unsigned long t = millis();
-  s << F("# built ")    << F(__DATE__) << endl;
+  s << F("# chickenhouse ")    << F(__DATE__) << endl;
   s << F("uptime=")     << (t / SEC) << endl;
-#if defined(WEBTIME)
-  s << F("time=")    << unixTime(t)
-    << F(" # ")    << hours(t) << F(":")    << minutes(t) 
-    << F(" (")    << fhours(t) << F(")") << endl;
-#endif
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
+#endif
+#if defined(WEBTIME)
+  s << F("time=")    << unixTime(t)
+    << F(" # ")    << hours(t) << F(":")    << minutes(t)
+    << F(" (")    << fhours(t) << F(")") << endl;
 #endif
   s << F("brightness=")    << bright << endl;
 #if defined(USEDHT)
@@ -177,12 +186,14 @@ void printdata(Print &s) {
   s << F("hatch_sense=")    << hatch_sensed.get() << endl;
   s << F("hatch_state=")    << hatch_state.get() << endl;
   s << F("hatch_moving=")    << hatch_moving.get() << endl;
+#if defined(USEDHT)
   s << F("cold=")    << cold.get() << endl;
-  s << F("heater=")    << heater.get() << endl;
+#endif
+  s << F("heater=")    << isOn(HEATER) << endl;
   s << F("door=")    << door.get() << endl;
-  s << F("light=")    << light.get() << endl;
-  s << F("extra1=")      << (digitalRead(EXTRA1) == LOW ? 1 : 0) << endl;
-  s << F("extra2=")      << (digitalRead(EXTRA2) == LOW ? 1 : 0) << endl;
+  s << F("light=")    << isOn(LIGHT) << endl;
+  s << F("extra1=")      << isOn(EXTRA1)  << endl;
+  s << F("extra2=")      << isOn(EXTRA2)  << endl;
   s << F("extra3=")      << analogRead(EXTRA3) << endl;
 #if defined(WEBTIME)
   s << F("day_hh=")    << day_hh << endl;
@@ -194,8 +205,10 @@ void printdata(Print &s) {
   s << F("day_delay=")    << day_delay << endl;
   s << F("up_timeout=")    << up_timeout << endl;
   s << F("down_timeout=")    << down_timeout << endl;
+#if defined(USEDHT)
   s << F("temp_delay=")    << temp_delay << endl;
   s << F("cold_thres=")    << cold_thres << endl;
+#endif
 }
 
 
@@ -221,8 +234,10 @@ void read_settings() {
   day_delay = read_int(4);
   up_timeout = read_int(6);
   down_timeout = read_int(8);
+#if defined(USEDHT)
   temp_delay = read_int(12);
   cold_thres = read_float(14);
+#endif
 #if defined(WEBTIME)
   day_hh = read_float(18);
   night_hh = read_float(22);
@@ -234,7 +249,6 @@ boolean equals(char* a, char* b) {
   return strcmp(a, b) == 0;
 }
 
-
 boolean process(WebServer &server, char* query) {
   URLPARAM_RESULT rc;
   char name[NAME_VALUE_LEN + 1];
@@ -243,60 +257,62 @@ boolean process(WebServer &server, char* query) {
     rc = server.nextURLparam(&query, name, NAME_VALUE_LEN, value, NAME_VALUE_LEN);
     if (rc == URLPARAM_OK) {
       int i = atoi(value);
-#if defined(WEBTIME)        
+#if defined(WEBTIME)
       if (equals(name, "day_hh")) {
         float f = atof(value);
         write_float(18, f);
       } else if (equals(name, "night_hh")) {
         float f = atof(value);
         write_float(22, f);
-      } else 
-#endif      
-      if (equals(name, "day_thres")) {
-        write_int(0, i);
-      } else if (equals(name, "night_thres")) {
-        write_int(2, i);
-      } else if (equals(name, "day_delay")) {
-        write_int(4, i);
-      } else if (equals(name, "up_timeout")) {
-        write_int(6, i);
-      } else if (equals(name, "down_timeout")) {
-        write_int(8, i);
-      } else if (equals(name, "temp_delay")) {
-        write_int(12, i);
-      } else if (equals(name, "cold_thres")) {
-        float f = atof(value);
-        write_float(14, f);
-      } else if (equals(name, "light")) {
-        light.set(i);
-        digitalWrite(LIGHT, i ? LOW : HIGH);
-      } else if (equals(name, "heater")) {
-        heater.set(i);
-        digitalWrite(HEATER, i ? LOW : HIGH);
-      } else if (equals(name, "extra1")) {
-        digitalWrite(EXTRA1, i ? LOW : HIGH);
-      } else if (equals(name, "extra2")) {
-        digitalWrite(EXTRA2, i ? LOW : HIGH);
-      } else if (equals(name, "hatch")) {
-        if (!hatch_moving.get()) {
-          if (i == OPEN && !hatch_state.is(OPEN)
-              && (!locked || (day.is(DAY) && day.age() > day_delay)))
-            hatch(i);
-          if (i == CLOSE && hatch_state.is(OPEN))
-            hatch(i);
-        } else if (i == STOP) {
-          hatch(i);
-        }
-      } else if (equals(name, "locked")) {
-        locked = i;
-      } else if (equals(name, "reset")) {
-        if (i == 1234) {
-          delay(3000);
-          softReset();
-        }
-      } else {
-        return false;
-      }
+      } else
+#endif
+        if (equals(name, "day_thres")) {
+          write_int(0, i);
+        } else if (equals(name, "night_thres")) {
+          write_int(2, i);
+        } else if (equals(name, "day_delay")) {
+          write_int(4, i);
+        } else if (equals(name, "up_timeout")) {
+          write_int(6, i);
+        } else if (equals(name, "down_timeout")) {
+          write_int(8, i);
+        } else
+#if defined(USEDHT)
+          if (equals(name, "temp_delay")) {
+            write_int(12, i);
+          } else if (equals(name, "cold_thres")) {
+            float f = atof(value);
+            write_float(14, f);
+          } else
+#endif
+            if (equals(name, "light")) {
+              turn(LIGHT, i);
+            } else if (equals(name, "heater")) {
+              turn(HEATER, i);
+            } else if (equals(name, "extra1")) {
+              turn(EXTRA1, i);
+            } else if (equals(name, "extra2")) {
+              turn(EXTRA2, i);
+            } else if (equals(name, "hatch")) {
+              if (!hatch_moving.get()) {
+                if (i == OPEN && !hatch_state.is(OPEN)
+                    && (!locked || (day.is(DAY) && day.age() > day_delay)))
+                  hatch(i);
+                if (i == CLOSE && hatch_state.is(OPEN))
+                  hatch(i);
+              } else if (i == STOP) {
+                hatch(i);
+              }
+            } else if (equals(name, "locked")) {
+              locked = i;
+            } else if (equals(name, "reset")) {
+              if (i == 1234) {
+                delay(3000);
+                softReset();
+              }
+            } else {
+              return false;
+            }
       read_settings();
     } else if (rc != URLPARAM_EOS) {
       return false;
@@ -351,12 +367,12 @@ void setup() {
   pinMode(LIGHT, OUTPUT);
   pinMode(EXTRA1, OUTPUT);
   pinMode(EXTRA2, OUTPUT);
-  digitalWrite(UP, HIGH);
-  digitalWrite(DOWN, HIGH);
-  digitalWrite(HEATER, HIGH);
-  digitalWrite(LIGHT, HIGH);
-  digitalWrite(EXTRA1, HIGH);
-  digitalWrite(EXTRA2, HIGH);
+  turn(UP, 0);
+  turn(DOWN, 0);
+  turn(HEATER, 0);
+  turn(LIGHT, 0);
+  turn(EXTRA1, 0);
+  turn(EXTRA2, 0);
   pinMode(UPPER, INPUT_PULLUP);
   pinMode(LOWER, INPUT_PULLUP);
   pinMode(TOGGLE, INPUT_PULLUP);
@@ -386,12 +402,11 @@ void setup() {
 
 void loop() {
   hatch_sensed.set(hatch_sense());
-  toggle.set(digitalRead(TOGGLE) == LOW);
+  toggle.set(isOn(TOGGLE));
 
-  door.set(digitalRead(DOOR) == LOW);
+  door.set(isOn(DOOR));
   if (door.age() > SEC && door.changed()) {
-    light.set(door.get());
-    digitalWrite(LIGHT, door.get() ? LOW : HIGH);
+    turn(LIGHT, door.get());
   }
 
 #if defined(USE_SERIAL)
@@ -450,8 +465,7 @@ void loop() {
 #if defined(USEDHT)
       cold.set(temp < cold_thres);
       if (cold.age() > temp_delay * SEC && cold.changed()) {
-        heater.set(cold.get());
-        digitalWrite(HEATER, cold.get() ? LOW : HIGH);
+        turn(HEATER, cold.get());
       }
 #endif
     }
