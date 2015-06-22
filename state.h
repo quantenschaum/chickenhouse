@@ -42,6 +42,9 @@ class State {
       latch = false;
       return l;
     }
+    unsigned long time() {
+      return flank;
+    }
     unsigned long age() {
       return millis() - flank;
     }

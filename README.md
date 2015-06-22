@@ -18,7 +18,7 @@ Hardware used in this project.
  * [DC motor with gearbox](http://www.mfacomodrills.com/gearboxes/919d_series.html)
 
 ### watchdog and bootloader
-If you enable the watchdog ([learn about the watchdog](http://playground.arduino.cc/Main/ArduinoReset)), which I highly recommend, you need to use a bootloader the can deal with a watchdog reset, otherwise the arduino will get stuck in an infinite loop upon watchdog reset. I use [optiboot](https://github.com/Optiboot/optiboot) for all my arduino projects. You should test if your bootloader can deal with the watchdog timer before enabling it.
+If you enable the watchdog ([learn about the watchdog](http://playground.arduino.cc/Main/ArduinoReset)), which I highly recommend, you need to use a bootloader the can deal with a watchdog reset, otherwise the arduino will get stuck in an infinite loop upon watchdog reset. I use [optiboot](https://github.com/Optiboot/optiboot) for all my arduino projects. Since arduino 1.6 optiboot is the default for the arduino UNO. You should test if the bootloader installed on your arduino can deal with the watchdog timer before enabling it. Reflash it if neccessary.
 
 ## libraries
 This code depends on the following libraries, which are not part of the arduino IDE

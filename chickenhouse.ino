@@ -16,16 +16,17 @@
 
 // configuration
 // (*) = comment out to disable the feature
-#define WEBTIME "nas" // hostname of http server to pull the time from (*)
+//#define WEBTIME "nas" // hostname of http server to pull the time from (*)
+#define WEB_PASSWD "YWRtaW46YWRtaW4="
 #define TIME_ADJUST 3600000ul // timeout in ms after which the time is pulled from the net
-#define WATCHDOG WDTO_8S // watchdog timeout (*)
-#define USEDHT DHT22 // type of DHT sensor (*)
+//#define WATCHDOG WDTO_8S // watchdog timeout (*)
+//#define USEDHT DHT22 // type of DHT sensor (*)
 //#define FREEMEM // show free memory in (*)
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED}
 #define IP_ADDRESS ip(192, 168, 222, 201)
-#define USE_SERIAL // enable serial communication (*)
+//#define USE_SERIAL // enable serial communication (*)
 
 // disable reset on open tty
 // stty -F /dev/ttyUSB0 115200 cs8 cread clocal -hupcl
@@ -157,10 +158,12 @@ float brightness() {
 
 void printdata(Print &s) {
   unsigned long t = millis();
+  s << F("# built ")    << F(__DATE__) << endl;
   s << F("uptime=")     << (t / SEC) << endl;
 #if defined(WEBTIME)
-  s << F("time=")    << unixTime(t) << endl;
-  s << F("# ")    << hours(t) << F(":")    << minutes(t) << F(" (")    << fhours(t) << F(")") << endl;
+  s << F("time=")    << unixTime(t)
+    << F(" # ")    << hours(t) << F(":")    << minutes(t) 
+    << F(" (")    << fhours(t) << F(")") << endl;
 #endif
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
@@ -193,16 +196,10 @@ void printdata(Print &s) {
   s << F("down_timeout=")    << down_timeout << endl;
   s << F("temp_delay=")    << temp_delay << endl;
   s << F("cold_thres=")    << cold_thres << endl;
-  s << F("build_date=")    << F(__DATE__) << endl;
-  //  s << F("ip=") << Ethernet.localIP() << endl;
-  //  s << F("_up=")      << (digitalRead(UP) == LOW ? 1 : 0) << endl;
-  //  s << F("_down=")      << (digitalRead(DOWN) == LOW ? 1 : 0) << endl;
-  //  s << F("_heater=")      << (digitalRead(HEATER) == LOW ? 1 : 0) << endl;
-  //  s << F("_light=")      << (digitalRead(LIGHT) == LOW ? 1 : 0) << endl;
 }
 
 
-
+#if defined(USE_SERIAL)
 void processinput() {
   char buf[BUFLEN + 1];
   int n = Serial.readBytesUntil('\n', buf, BUFLEN);
@@ -216,6 +213,7 @@ void processinput() {
   while (Serial.available())
     Serial.read();
 }
+#endif
 
 void read_settings() {
   day_thres = read_int(0);
@@ -243,16 +241,18 @@ boolean process(WebServer &server, char* query) {
   char value[NAME_VALUE_LEN + 1];
   while (strlen(query)) {
     rc = server.nextURLparam(&query, name, NAME_VALUE_LEN, value, NAME_VALUE_LEN);
-    //    Serial << "#" << name << "=" << value << endl;
     if (rc == URLPARAM_OK) {
       int i = atoi(value);
+#if defined(WEBTIME)        
       if (equals(name, "day_hh")) {
         float f = atof(value);
         write_float(18, f);
       } else if (equals(name, "night_hh")) {
         float f = atof(value);
         write_float(22, f);
-      } else if (equals(name, "day_thres")) {
+      } else 
+#endif      
+      if (equals(name, "day_thres")) {
         write_int(0, i);
       } else if (equals(name, "night_thres")) {
         write_int(2, i);
@@ -318,7 +318,7 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
   boolean ok = 1;
 
   if (strlen(query)) {
-    if (server.checkCredentials("YWRtaW46YWRtaW4="))
+    if (server.checkCredentials(WEB_PASSWD))
       ok = process(webserver, query);
     else {
       server.httpUnauthorized();
@@ -328,7 +328,6 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
 
   if (!ok) {
     server.httpFail();
-    server << F("query invalid");
     return;
   }
 
@@ -342,10 +341,10 @@ void setup() {
   wdt_disable();
   wdt_enable(WATCHDOG);
 #endif
-
+#if defined(USE_SERIAL)
   Serial.begin(115200);
   Serial.setTimeout(500);
-
+#endif
   pinMode(UP, OUTPUT);
   pinMode(DOWN, OUTPUT);
   pinMode(HEATER, OUTPUT);
@@ -381,7 +380,6 @@ void setup() {
   Ethernet.begin(mac, ip);
   webserver.setDefaultCommand(&rest);
   webserver.begin();
-  //  Serial.println("UP");
 }
 
 
@@ -396,9 +394,10 @@ void loop() {
     digitalWrite(LIGHT, door.get() ? LOW : HIGH);
   }
 
-  // serial communication
+#if defined(USE_SERIAL)
   if (Serial.available())
     processinput();
+#endif
 
   // Ethernet.maintain();
 
