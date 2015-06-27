@@ -17,7 +17,7 @@
 // configuration
 // (*) = comment out to disable the feature
 #define WEBTIME "nas" // hostname of http server to pull the time from (*)
-#define WEB_PASSWD "YWRtaW46YWRtaW4="
+#define WEB_PASSWD "YWRtaW46YWRtaW4=" // base64 of admin:admin
 #define TIME_ADJUST 3600000ul // timeout in ms after which the time is pulled from the net
 #define WATCHDOG WDTO_8S // watchdog timeout (*)
 #define USEDHT DHT22 // type of DHT sensor (*)
@@ -497,50 +497,3 @@ void loop() {
   wdt_reset();
 #endif
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
