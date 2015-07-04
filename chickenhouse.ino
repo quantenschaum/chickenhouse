@@ -18,7 +18,7 @@
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define MIN_TIME 1436012692 // minimum valid time (UTC, secs sincs epoch) 
-#define TIMEZONE 0 // offset in hours
+#define TIMEZONE 1 // offset in hours
 //#define NTP_SERVER ntpIp(192, 168, 222, 201) // use gateway IP if undefined (*)
 #define TIME_RESYNC 3600ul // timeout in s after which the time is pulled from the net
 #define WEB_PASSWD "YWRtaW46YWRtaW4=" // base64 of admin:admin
@@ -28,7 +28,7 @@
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x1C, 0xEA}
-//#define IP_ADDRESS ip(192, 168, 222, 201) // use DHCP if disabled (*)
+#define IP_ADDRESS ip(192, 168, 222, 203) // use DHCP if disabled (*)
 #define USE_SERIAL 115200 // enable serial communication (bauds) (*)
 //#define WEBDUINO_SERIAL_DEBUGGING 1
 
@@ -41,24 +41,24 @@
 // usable digital pins: 0 1 2 3 4 5 6 7 8 9 (0 1 only if no Serial is used)
 // usable  analog pins: 0 1 2 3 4 5 (6 7 on Nano)
 
-// outputs to operate the relais
-#define UP           A0
-#define DOWN         A1
-#define LIGHT        A2
-#define HEATER       A3
-#define EXTRA1       A4
-#define EXTRA2       A5
-
 // analog inputs
-#define BRIGHTNESS   A6
-#define EXTRA3       A7
+#define BRIGHTNESS   A6 //A0
+//#define EXTRA3       A7
 
 // digital inputs
-#define UPPER        8
-#define LOWER        7
-#define TOGGLE       6
-#define DOOR         5
-#define DHTPIN       3
+#define UPPER        8 //A1
+#define LOWER        7 //A2
+#define TOGGLE       6 //A3
+#define DOOR         5 //A4
+#define DHTPIN       3 //A5
+
+// outputs to operate the relais
+#define UP           A0 //7
+#define DOWN         A1 //6
+#define LIGHT        A2 //5
+#define HEATER       A3 //4
+//#define EXTRA1       A4
+//#define EXTRA2       A5
 
 
 // constants
@@ -235,17 +235,16 @@ void hatch(int x) {
   hatch_moving.set(x);
 }
 
-
 int hatch_sense() {
   boolean lower = isOn(LOWER);
   boolean upper = isOn(UPPER);
   if (upper && !lower)
     return 1;
-  else if (lower && !upper)
+  if (lower && !upper)
     return -1;
-  else
-    return 0;
+  return 0;
 }
+
 
 // from 0 to 100
 float brightness() {
@@ -287,9 +286,15 @@ void printdata(Print &s) {
   s << F("door=")    << door.get();
   printTimeMs(s, door.time());
   s << F("light=")    << isOn(LIGHT) << endl;
+#if defined(EXTRA1)  
   s << F("extra1=")      << isOn(EXTRA1)  << endl;
+#endif
+#if defined(EXTRA2)    
   s << F("extra2=")      << isOn(EXTRA2)  << endl;
+#endif  
+#if defined(EXTRA3)
   s << F("extra3=")      << analogRead(EXTRA3) << endl;
+#endif
 #if defined(WEBTIME)
   s  << F("# settings") << endl;
   s << F("day_hh=")    << day_hh << endl;
@@ -381,11 +386,18 @@ boolean process(WebServer &server, char* query) {
               turn(LIGHT, i);
             } else if (equals(name, "heater")) {
               turn(HEATER, i);
-            } else if (equals(name, "extra1")) {
+            } else 
+#if defined(EXTRA1)              
+            if (equals(name, "extra1")) {
               turn(EXTRA1, i);
-            } else if (equals(name, "extra2")) {
+            } else 
+#endif
+#if defined(EXTRA2)              
+            if (equals(name, "extra2")) {
               turn(EXTRA2, i);
-            } else if (equals(name, "hatch")) {
+            } else
+#endif            
+            if (equals(name, "hatch")) {
               if (!hatch_moving.get()) {
                 if (i == OPEN && !hatch_state.is(OPEN)
                     && (!locked || (daytime.is(DAY) && daytime.age() > day_delay * SEC))) {
@@ -486,19 +498,24 @@ void setup() {
 #if defined(USE_SERIAL)
   Serial.begin(USE_SERIAL);
   Serial.setTimeout(500);
+  Serial << F("starting") << endl;
 #endif
   pinMode(UP, OUTPUT);
-  pinMode(DOWN, OUTPUT);
-  pinMode(HEATER, OUTPUT);
-  pinMode(LIGHT, OUTPUT);
-  pinMode(EXTRA1, OUTPUT);
-  pinMode(EXTRA2, OUTPUT);
   turn(UP, 0);
+  pinMode(DOWN, OUTPUT);
   turn(DOWN, 0);
+  pinMode(HEATER, OUTPUT);
   turn(HEATER, 0);
+  pinMode(LIGHT, OUTPUT);
   turn(LIGHT, 0);
+#if defined(EXTRA1)
+  pinMode(EXTRA1, OUTPUT);
   turn(EXTRA1, 0);
+#endif
+#if defined(EXTRA2)
+  pinMode(EXTRA2, OUTPUT);
   turn(EXTRA2, 0);
+#endif
   pinMode(UPPER, INPUT_PULLUP);
   pinMode(LOWER, INPUT_PULLUP);
   pinMode(TOGGLE, INPUT_PULLUP);
