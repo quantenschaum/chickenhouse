@@ -29,8 +29,8 @@
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x1C, 0xEA}
-#define IP_ADDRESS ip(192, 168, 222, 205) // use DHCP if disabled (*)
-#define USE_SERIAL 115200 // enable serial communication (bauds) (*)
+#define IP_ADDRESS ip(192, 168, 222, 201) // use DHCP if disabled (*)
+//#define USE_SERIAL 115200 // enable serial communication (bauds) (*)
 //#define WEBDUINO_SERIAL_DEBUGGING 1
 
 // disable reset on open tty
@@ -43,21 +43,21 @@
 // usable  analog pins: 0 1 2 3 4 5 (6 7 on Nano)
 
 // analog inputs
-#define BRIGHTNESS   A6 //A0
+#define BRIGHTNESS   A0
 //#define EXTRA3       A7
 
 // digital inputs
-#define UPPER        8 //A1
-#define LOWER        7 //A2
-#define TOGGLE       6 //A3
-#define DOOR         5 //A4
-#define DHTPIN       3 //A5
+#define UPPER        A1
+#define LOWER        A2
+#define TOGGLE       A3
+#define DOOR         A4
+#define DHTPIN       A5
 
 // outputs to operate the relais
-#define UP           A0 //7
-#define DOWN         A1 //6
-#define LIGHT        A2 //5
-#define HEATER       A3 //4
+#define UP           7
+#define DOWN         6
+#define LIGHT        5
+#define HEATER       4
 //#define EXTRA1       A4
 //#define EXTRA2       A5
 
@@ -265,7 +265,7 @@ void printdata(Print &s) {
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
 #endif
-  s << F("brightness=")    << bright << endl;
+  s << F("brightness=")    << bright << F(" #") << brightness() << endl;
 #if defined(USEDHT)
   s << F("temp=")    << temp << endl;
   s << F("humi=")    << humi << endl;
@@ -454,7 +454,6 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
     return;
   }
 
-  //  server.httpSuccess("text/plain", "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\nRefresh: 3\r\n");
   server.httpSuccess("text/plain", "Cache-Control: no-cache\r\n");
   printdata(server);
 }
@@ -462,18 +461,17 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
 void readSensors() {
   locked = 1;
 #if defined(USEDHT)
-  float x = dht.readTemperature();
-  if (x > -50 && x < 80)
-    temp = 0.8 * temp + 0.2 * x;
-  x = dht.readHumidity();
-  if (x >= 0 && x <= 100)
-    humi = 0.8 * humi + 0.2 * x;
+  temp = dht.readTemperature();
+  humi = dht.readHumidity();
 #endif
   bright = 0.9 * bright + 0.1 * brightness();
 #if defined(WEBTIME)
   time_t t = now();
   float h = hour(t) + minute(t) / 60.;
-  boolean isday = (timeStatus() == timeNotSet) || (h > day_hh && h < night_hh);
+  boolean timeUnset = timeStatus() == timeNotSet;
+  if (timeUnset && millis() > 4000 * SEC)
+    softReset();
+  boolean isday = timeUnset || (h > day_hh && h < night_hh);
 #else
   boolean isday = true;
 #endif
