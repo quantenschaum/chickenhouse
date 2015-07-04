@@ -77,36 +77,3 @@ unsigned long webUnixTime(Client &client) {
   return time;
 }
 
-unsigned long toffset = 0, tset = 0;
-
-void adjustTime() {
-  EthernetClient client;
-  unsigned long tunix = 0;
-  tunix = webUnixTime(client);
-  if (!tunix) {
-    tset += 300000; // try again if 5 minutes
-  } else {
-    tset = millis();
-    toffset = tunix - tset / 1000;
-  }
-}
-
-unsigned long unixTime(unsigned long &tms) {
-  return tms / 1000 + toffset;
-}
-
-byte seconds(unsigned long &tms) {
-  return unixTime(tms) % 60;
-}
-
-byte minutes(unsigned long &tms) {
-  return (unixTime(tms) / 60) % 60;
-}
-
-byte hours(unsigned long &tms) {
-  return (unixTime(tms) / 3600) % 24;
-}
-
-float fhours(unsigned long &tms) {
-  return hours(tms) + minutes(tms) / 60.0;
-}
