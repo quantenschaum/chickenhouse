@@ -16,9 +16,9 @@
 
 // configuration
 // (*) = comment out to disable the feature
-#define WEBTIME "nas" // hostname of time serverfrom (*)
+#define WEBTIME // use time (*)
+#define MIN_TIME 1436012692 // minimum valid time (UTC, secs sincs epoch) 
 #define TIMEZONE 0 // offset in hours
-#define TIME_PROVIDER getNtpTime // use 'getWebTime' or 'getNtpTime'
 //#define NTP_SERVER ntpIp(192, 168, 222, 201) // use gateway IP if undefined (*)
 #define TIME_RESYNC 3600ul // timeout in s after which the time is pulled from the net
 #define WEB_PASSWD "YWRtaW46YWRtaW4=" // base64 of admin:admin
@@ -29,7 +29,7 @@
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x1C, 0xEA}
 //#define IP_ADDRESS ip(192, 168, 222, 201) // use DHCP if disabled (*)
-#define USE_SERIAL 115200 // enable serial communication (*)
+#define USE_SERIAL 115200 // enable serial communication (bauds) (*)
 //#define WEBDUINO_SERIAL_DEBUGGING 1
 
 // disable reset on open tty
@@ -84,7 +84,6 @@
 
 #if defined(WEBTIME)
 #include <Time.h>
-#include "webtime.h"
 #endif
 
 #if defined(WATCHDOG)
@@ -136,34 +135,34 @@ State door(0);
 void(* softReset) (void) = 0; //declare reset function at address 0
 
 #if defined(WEBTIME)
-unsigned long toffset = 0;
-
-time_t getWebTime() {
-  EthernetClient client;
-  time_t t = webUnixTime(client) + TIMEZONE * SECS_PER_HOUR;
-  toffset = t - millis() / 1000;
-  return t;
-}
-
 time_t msToTime(unsigned long &ms) {
-  return ms / 1000 + toffset;
-}
-
-time_t secs() {
-  unsigned long ms = millis();
-  return msToTime(ms);
+  return now() - (millis() - ms) / 1000ul;
 }
 
 void printTime(Print &s, time_t &t) {
-  s << F(" # ") << year(t) << F("-") << month(t) << F("-") << day(t) <<
-    F(" ") << hour(t) << F(":") << minute(t) << F(":") << second(t) << endl;
+  if (timeStatus() != timeNotSet) {
+    s << F(" # ") << year(t) << F("-") << month(t) << F("-") << day(t) <<
+      F(" ") << hour(t) << F(":") << minute(t) << F(":") << second(t) << endl;
+  } else {
+    s << endl;
+  }
 }
 
 void printTimeMs(Print &s, unsigned long ms) {
   time_t t = msToTime(ms);
   printTime(s, t);
 }
+#else
+void printTime(Print &s, unsigned long &t) {
+  s << endl;
+}
 
+void printTimeMs(Print &s, unsigned long ms) {
+  s << endl;
+}
+#endif
+
+#if defined(WEBTIME)
 #define NTP_PACKET_SIZE 48 // NTP time is in the first 48 bytes of message
 
 time_t getNtpTime() {
@@ -188,9 +187,8 @@ time_t getNtpTime() {
       secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
       secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
       secsSince1900 |= (unsigned long)packetBuffer[43];
-      time_t t = secsSince1900 - 2208988800UL + TIMEZONE * SECS_PER_HOUR;
-      toffset = t - millis() / 1000;
-      return t;
+      time_t t = secsSince1900 - 2208988800UL;
+      return t > MIN_TIME ? t + TIMEZONE * SECS_PER_HOUR : 0;
     }
   }
   return 0; // return 0 if unable to get the time
@@ -256,13 +254,14 @@ float brightness() {
 
 
 void printdata(Print &s) {
-  time_t tt = now();
-  s << F("# chickenhouse ")    << F(__DATE__) << F("") << endl;
+  s << F("# ") << F(__FILE__) << F(" ") << F(__DATE__) << F(" v???") << endl;
 #if defined(WEBTIME)
+  time_t tt = now();
   s << F("time=") << tt;
   printTime(s, tt);
 #endif
-  s << F("uptime=")     << (millis() / SEC) << endl;
+  s << F("uptime=")     << (millis() / SEC);
+  printTimeMs(s, 0);
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
 #endif
@@ -314,12 +313,8 @@ void processinput() {
   char buf[BUFLEN + 1];
   int n = Serial.readBytesUntil('\n', buf, BUFLEN);
   buf[n] = 0;
-
-  if (!process(webserver, buf))
-    Serial << F("ERROR") << endl;
-
+  process(webserver, buf);
   printdata(Serial);
-
   while (Serial.available())
     Serial.read();
 }
@@ -448,8 +443,38 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
     return;
   }
 
-  server.httpSuccess("text/plain", "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\nRefresh: 5\r\n");
+  server.httpSuccess("text/plain", "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\n");
   printdata(server);
+}
+
+void readSensors() {
+  locked = 1;
+#if defined(USEDHT)
+  float x = dht.readTemperature();
+  if (x > -50 && x < 80)
+    temp = 0.8 * temp + 0.2 * x;
+  x = dht.readHumidity();
+  if (x >= 0 && x <= 100)
+    humi = 0.8 * humi + 0.2 * x;
+#endif
+  bright = 0.9 * bright + 0.1 * brightness();
+#if defined(WEBTIME)
+  time_t t = now();
+  float h = hour(t) + minute(t) / 60.;
+  boolean isday = (timeStatus() == timeNotSet) || (h > day_hh && h < night_hh);
+#else
+  boolean isday = true;
+#endif
+  daytime.set((bright < night_thres || !isday) ? NIGHT : (bright > day_thres && isday) ? DAY : UNDEFINED);
+#if defined(USEDHT)
+  cold.set(temp < cold_thres);
+  if (cold.age() > temp_delay * SEC && cold.changed()) {
+    turn(HEATER, cold.get());
+  }
+#endif
+#if !defined(IP_ADDRESS)
+  Ethernet.maintain();
+#endif
 }
 
 
@@ -498,7 +523,7 @@ void setup() {
   webserver.begin();
 
 #if defined(WEBTIME)
-  setSyncProvider(TIME_PROVIDER);
+  setSyncProvider(getNtpTime);
   setSyncInterval(TIME_RESYNC);
 #endif
 #if defined(USE_SERIAL)
@@ -528,13 +553,9 @@ void loop() {
     processinput();
 #endif
 
-  // Ethernet.maintain();
-
   int len = BUFLEN;
   char buf[BUFLEN + 1];
   webserver.processConnection(buf, &len);
-
-  unsigned long ms = millis();
 
   int moving = hatch_moving.get();
   if (moving != STOP) {
@@ -555,35 +576,9 @@ void loop() {
   } else {
 
     // read sensors
-    if (ms - timer > 5 * SEC) {
-      timer = ms;
-      locked = 1;
-#if defined(USEDHT)
-      float x = dht.readTemperature();
-      if (x > -50 && x < 80)
-        temp = 0.8 * temp + 0.2 * x;
-      x = dht.readHumidity();
-      if (x >= 0 && x <= 100)
-        humi = 0.8 * humi + 0.2 * x;
-#endif
-      bright = 0.9 * bright + 0.1 * brightness();
-#if defined(WEBTIME)
-      time_t t = now();
-      float h = hour(t) + minute(t) / 60.;
-      boolean isday = (timeStatus() == timeNotSet) || (h > day_hh && h < night_hh);
-#else
-      boolean isday = true;
-#endif
-      daytime.set((bright < night_thres || !isday) ? NIGHT : (bright > day_thres && isday) ? DAY : UNDEFINED);
-#if defined(USEDHT)
-      cold.set(temp < cold_thres);
-      if (cold.age() > temp_delay * SEC && cold.changed()) {
-        turn(HEATER, cold.get());
-      }
-#endif
-#if !defined(IP_ADDRESS)
-      Ethernet.maintain();
-#endif
+    if (millis() - timer > 5 * SEC) {
+      timer = millis();
+      readSensors();
     }
 
     if (toggle.get() && toggle.age() > SEC && toggle.changed()) {
