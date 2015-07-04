@@ -15,7 +15,7 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F(__FILE__) << F(" ") << F(__DATE__) << F(" v2.0a")
+#define VERSION F(__FILE__) << F(" ") << F(__DATE__) << F(" v2.1")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define MIN_TIME 1436012692 // minimum valid time (UTC, secs sincs epoch) 
@@ -116,7 +116,7 @@ float day_hh, night_hh;
 
 #if defined(USEDHT)
 DHT dht(DHTPIN, USEDHT);
-float temp = 20, humi = 50;
+float temp = 0, humi = 0;
 float cold_thres;
 int temp_delay;
 State cold(0);
@@ -265,7 +265,7 @@ void printdata(Print &s) {
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
 #endif
-  s << F("brightness=")    << bright << F(" #") << brightness() << endl;
+  s << F("brightness=")    << bright << endl;
 #if defined(USEDHT)
   s << F("temp=")    << temp << endl;
   s << F("humi=")    << humi << endl;
@@ -458,13 +458,24 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
   printdata(server);
 }
 
+#if defined(USEDHT)
+void readTH(float a) {
+  float x = dht.readTemperature();
+  if (x > -100 && x < 100)
+    temp = (1 - a) * temp + a * x;
+  x = dht.readHumidity();
+  if (x >= 0 && x <= 100)
+    humi = (1 - a) * humi + a * x;
+}
+#endif
+
+
 void readSensors() {
   locked = 1;
-#if defined(USEDHT)
-  temp = dht.readTemperature();
-  humi = dht.readHumidity();
-#endif
   bright = 0.9 * bright + 0.1 * brightness();
+#if defined(USEDHT)
+  readTH(0.5);
+#endif
 #if defined(WEBTIME)
   time_t t = now();
   float h = hour(t) + minute(t) / 60.;
@@ -522,8 +533,11 @@ void setup() {
   read_settings();
 
   hatch_state.set(hatch_sense());
-  float b = brightness();
-  daytime.set(b < night_thres ? NIGHT : b > day_thres ? DAY : UNDEFINED);
+  bright = brightness();
+#if defined(USE_DHT)
+  readTH(1);
+#endif
+  daytime.set(bright < night_thres ? NIGHT : bright > day_thres ? DAY : UNDEFINED);
   daytime.changed();
 
 #if defined(DHT)
