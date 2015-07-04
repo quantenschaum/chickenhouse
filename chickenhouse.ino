@@ -15,6 +15,7 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
+#define VERSION F(__FILE__) << F(" ") << F(__DATE__) << F(" v2.0a")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define MIN_TIME 1436012692 // minimum valid time (UTC, secs sincs epoch) 
@@ -28,7 +29,7 @@
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x1C, 0xEA}
-#define IP_ADDRESS ip(192, 168, 222, 203) // use DHCP if disabled (*)
+#define IP_ADDRESS ip(192, 168, 222, 205) // use DHCP if disabled (*)
 #define USE_SERIAL 115200 // enable serial communication (bauds) (*)
 //#define WEBDUINO_SERIAL_DEBUGGING 1
 
@@ -253,7 +254,7 @@ float brightness() {
 
 
 void printdata(Print &s) {
-  s << F("# ") << F(__FILE__) << F(" ") << F(__DATE__) << F(" v???") << endl;
+  s << F("# ") << VERSION << endl;
 #if defined(WEBTIME)
   time_t tt = now();
   s << F("time=") << tt;
@@ -286,12 +287,12 @@ void printdata(Print &s) {
   s << F("door=")    << door.get();
   printTimeMs(s, door.time());
   s << F("light=")    << isOn(LIGHT) << endl;
-#if defined(EXTRA1)  
+#if defined(EXTRA1)
   s << F("extra1=")      << isOn(EXTRA1)  << endl;
 #endif
-#if defined(EXTRA2)    
+#if defined(EXTRA2)
   s << F("extra2=")      << isOn(EXTRA2)  << endl;
-#endif  
+#endif
 #if defined(EXTRA3)
   s << F("extra3=")      << analogRead(EXTRA3) << endl;
 #endif
@@ -386,41 +387,39 @@ boolean process(WebServer &server, char* query) {
               turn(LIGHT, i);
             } else if (equals(name, "heater")) {
               turn(HEATER, i);
-            } else 
-#if defined(EXTRA1)              
-            if (equals(name, "extra1")) {
-              turn(EXTRA1, i);
-            } else 
-#endif
-#if defined(EXTRA2)              
-            if (equals(name, "extra2")) {
-              turn(EXTRA2, i);
             } else
-#endif            
-            if (equals(name, "hatch")) {
-              if (!hatch_moving.get()) {
-                if (i == OPEN && !hatch_state.is(OPEN)
-                    && (!locked || (daytime.is(DAY) && daytime.age() > day_delay * SEC))) {
-                  Serial << "UP" << endl;
-                  hatch(i);
-                }
-                if (i == CLOSE && hatch_state.is(OPEN)) {
-                  Serial << "DOWN" << endl;
-                  hatch(i);
-                }
-              } else if (i == STOP) {
-                hatch(i);
-              }
-            } else if (equals(name, "locked")) {
-              locked = i;
-            } else if (equals(name, "reset")) {
-              if (i == 1234) {
-                delay(3000);
-                softReset();
-              }
-            } else {
-              return false;
-            }
+#if defined(EXTRA1)
+              if (equals(name, "extra1")) {
+                turn(EXTRA1, i);
+              } else
+#endif
+#if defined(EXTRA2)
+                if (equals(name, "extra2")) {
+                  turn(EXTRA2, i);
+                } else
+#endif
+                  if (equals(name, "hatch")) {
+                    if (!hatch_moving.get()) {
+                      if (i == OPEN && !hatch_state.is(OPEN)
+                          && (!locked || daytime.is(DAY))) {
+                        hatch(OPEN);
+                      }
+                      if (i == CLOSE && !hatch_state.is(CLOSE)) {
+                        hatch(hatch_state.is(UNDEFINED) ? OPEN : CLOSE);
+                      }
+                    } else if (i == STOP) {
+                      hatch(STOP);
+                    }
+                  } else if (equals(name, "locked")) {
+                    locked = i;
+                  } else if (equals(name, "reset")) {
+                    if (i == 1) {
+                      delay(3000);
+                      softReset();
+                    }
+                  } else {
+                    return false;
+                  }
       read_settings();
     } else if (rc != URLPARAM_EOS) {
       return false;
@@ -455,7 +454,8 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
     return;
   }
 
-  server.httpSuccess("text/plain", "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\n");
+  //  server.httpSuccess("text/plain", "Cache-Control: no-cache, no-store, must-revalidate\r\nPragma: no-cache\r\nExpires: 0\r\nRefresh: 3\r\n");
+  server.httpSuccess("text/plain", "Cache-Control: no-cache\r\n");
   printdata(server);
 }
 
