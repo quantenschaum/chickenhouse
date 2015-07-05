@@ -31,6 +31,7 @@
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x1C, 0xEA}
 #define IP_ADDRESS ip(192, 168, 222, 201) // use DHCP if disabled (*)
 //#define USE_SERIAL 115200 // enable serial communication (bauds) (*)
+//#define RAW_VALUES // output raw values of temp, humi, brightness (*)
 //#define WEBDUINO_SERIAL_DEBUGGING 1
 
 // disable reset on open tty
@@ -104,7 +105,6 @@
 
 
 // global variables
-float t, h, b;
 byte mac[] = MAC_ADDRESS;
 #if defined(IP_ADDRESS)
 IPAddress IP_ADDRESS;
@@ -130,6 +130,10 @@ float bright = 0;
 int day_thres, night_thres;
 int day_delay, up_timeout, down_timeout;
 boolean locked = 1;
+
+#if defined(RAW_VALUES)
+float t, h, b;
+#endif
 
 State toggle(0);
 State daytime(0);
@@ -253,7 +257,11 @@ int hatch_sense() {
 
 // from 0 to 100
 float brightness() {
-  return b = analogRead(BRIGHTNESS) * 0.097751711f;
+  float x = analogRead(BRIGHTNESS) * 0.097751711f;
+#if defined(RAW_VALUES)
+  b = x;
+#endif
+  return x;
 }
 
 
@@ -269,10 +277,18 @@ void printdata(Print &s) {
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
 #endif
+#if defined(RAW_VALUES)
   s << F("brightness=")    << bright << F(" # ") << b << endl;
 #if defined(USEDHT)
   s << F("temp=")    << temp << F(" # ") << t << endl;
   s << F("humi=")    << humi << F(" # ") << h << endl;
+#endif
+#else
+  s << F("brightness=")    << bright << endl;
+#if defined(USEDHT)
+  s << F("temp=")    << temp << endl;
+  s << F("humi=")    << humi << endl;
+#endif
 #endif
   s << F("day=")    << daytime.get();
   printTimeMs(s, daytime.time());
@@ -465,10 +481,16 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
 #if defined(USEDHT)
 void readTH(float a) {
   float x;
-  x = t = dht.readTemperature();
+  x = dht.readTemperature();
+#if defined(RAW_VALUES)
+  t = x;
+#endif
   if (x > -100 && x < 100)
     temp = (1 - a) * temp + a * x;
-  x = h = dht.readHumidity();
+  x = dht.readHumidity();
+#if defined(RAW_VALUES)
+  h = x;
+#endif
   if (x >= 0 && x <= 100)
     humi = (1 - a) * humi + a * x;
 }
