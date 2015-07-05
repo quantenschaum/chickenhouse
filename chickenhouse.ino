@@ -15,7 +15,7 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F(__FILE__) << F(" ") << F(__DATE__) << F(" v2.1")
+#define VERSION F(__FILE__) << F(" ") << F(__DATE__) << F(" v2.3")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define MIN_TIME 1436012692 // minimum valid time (UTC, secs sincs epoch) 
@@ -101,6 +101,7 @@
 
 
 // global variables
+float t, h, b;
 byte mac[] = MAC_ADDRESS;
 #if defined(IP_ADDRESS)
 IPAddress IP_ADDRESS;
@@ -145,7 +146,7 @@ void printTime(Print &s, time_t &t) {
     s << F(" # ") << year(t) << F("-") << month(t) << F("-") << day(t) <<
       F(" ") << hour(t) << F(":") << minute(t) << F(":") << second(t) << endl;
   } else {
-    s << endl;
+    s << F(" # clock not set") << endl;
   }
 }
 
@@ -249,7 +250,7 @@ int hatch_sense() {
 
 // from 0 to 100
 float brightness() {
-  return analogRead(BRIGHTNESS) * 0.097751711f;
+  return b = analogRead(BRIGHTNESS) * 0.097751711f;
 }
 
 
@@ -265,10 +266,10 @@ void printdata(Print &s) {
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
 #endif
-  s << F("brightness=")    << bright << endl;
+  s << F("brightness=")    << bright << F(" # ") << b << endl;
 #if defined(USEDHT)
-  s << F("temp=")    << temp << endl;
-  s << F("humi=")    << humi << endl;
+  s << F("temp=")    << temp << F(" # ") << t << endl;
+  s << F("humi=")    << humi << F(" # ") << h << endl;
 #endif
   s << F("day=")    << daytime.get();
   printTimeMs(s, daytime.time());
@@ -460,10 +461,11 @@ void rest(WebServer &server, WebServer::ConnectionType type, char* query, bool c
 
 #if defined(USEDHT)
 void readTH(float a) {
-  float x = dht.readTemperature();
+  float x;
+  x = t = dht.readTemperature();
   if (x > -100 && x < 100)
     temp = (1 - a) * temp + a * x;
-  x = dht.readHumidity();
+  x = h = dht.readHumidity();
   if (x >= 0 && x <= 100)
     humi = (1 - a) * humi + a * x;
 }
@@ -525,6 +527,7 @@ void setup() {
   pinMode(EXTRA2, OUTPUT);
   turn(EXTRA2, 0);
 #endif
+  pinMode(BRIGHTNESS, INPUT);
   pinMode(UPPER, INPUT_PULLUP);
   pinMode(LOWER, INPUT_PULLUP);
   pinMode(TOGGLE, INPUT_PULLUP);
@@ -533,16 +536,14 @@ void setup() {
   read_settings();
 
   hatch_state.set(hatch_sense());
-  bright = brightness();
 #if defined(USE_DHT)
+  dht.begin();
   readTH(1);
 #endif
+  bright = brightness();
   daytime.set(bright < night_thres ? NIGHT : bright > day_thres ? DAY : UNDEFINED);
   daytime.changed();
 
-#if defined(DHT)
-  dht.begin();
-#endif
 #if defined(IP_ADDRESS)
   Ethernet.begin(mac, ip);
 #else
