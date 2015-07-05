@@ -39,6 +39,9 @@
 // IO pins
 // 11, 12, 13 are used by SPI
 // 10 is used as CS for the ethernet shield
+// ATTENTION! The ethernet shield also uses pin 4 if the SD card slot is occupied
+// Pins A0 and A1 have 10k pullup resistors attached, you may need to cut these wires
+
 // usable digital pins: 0 1 2 3 4 5 6 7 8 9 (0 1 only if no Serial is used)
 // usable  analog pins: 0 1 2 3 4 5 (6 7 on Nano)
 
