@@ -1,0 +1,20 @@
+#!/bin/bash
+
+URL="http://admin:admin@nas/chickencam/ctrl/"
+SET="curl -v $URL?"
+
+function param {
+  curl $URL?$1
+  sleep 1
+}
+
+param day_hh=7.5
+param night_hh=22
+param day_thres=30
+param night_thres=7
+param day_delay=300
+param up_timeout=17
+param down_timeout=12
+param temp_delay=300
+param cold_thres=0
+

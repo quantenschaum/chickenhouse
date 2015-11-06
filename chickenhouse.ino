@@ -15,17 +15,17 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F(__FILE__) << F(" ") << F(__DATE__) << F(" v2.3")
+#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.6")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
-#define MIN_TIME 1436012692 // minimum valid time (UTC, secs sincs epoch) 
+#define MIN_TIME 1446761120 // minimum valid time (UTC, secs sincs epoch) 
 #define TIMEZONE 1 // offset in hours
 //#define NTP_SERVER ntpIp(192, 168, 222, 201) // use gateway IP if undefined (*)
-#define TIME_RESYNC 3600ul // timeout in s after which the time is pulled from the net
+#define TIME_RESYNC 300 // timeout in s after which the time is pulled from the net
 #define WEB_PASSWD "YWRtaW46YWRtaW4=" // base64 of admin:admin
 #define WATCHDOG WDTO_8S // watchdog timeout (*)
 #define USEDHT DHT22 // type of DHT sensor (*)
-#define FREEMEM // show free memory in (*)
+//#define FREEMEM // show free memory in (*)
 #define BUFLEN 32 // buffer size for http server
 #define NAME_VALUE_LEN 16 // buffer size for http server query parser
 #define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x1C, 0xEA}
@@ -88,11 +88,28 @@
 #include "state.h"
 
 #if defined(WEBTIME)
-#include <Time.h>
+#include "Time.h"
 #endif
 
 #if defined(WATCHDOG)
 #include <avr/wdt.h>
+#define WDT_INIT wdt_disable(); wdt_enable(WATCHDOG)
+#define WDT_RESET wdt_reset()
+#else
+#define WDT_INIT
+#define WDT_RESET
+#endif
+
+#if defined(USE_SERIAL)
+#define PRINT(S) Serial.print(S)
+#define PRINTF(S) Serial.print(F(S))
+#define PRINTLN(S) Serial.println(S)
+#define PRINTLNF(S) Serial.println(F(S))
+#else
+#define PRINT(S)
+#define PRINTF(S)
+#define PRINTLN(S)
+#define PRINTLNF(S)
 #endif
 
 #if defined(FREEMEM)
@@ -113,6 +130,7 @@ IPAddress IP_ADDRESS;
 WebServer webserver("", 80);
 
 unsigned long timer = 0;
+byte mcusr;
 
 #if defined(WEBTIME)
 float day_hh, night_hh;
@@ -151,10 +169,13 @@ time_t msToTime(unsigned long &ms) {
 void printTime(Print &s, time_t &t) {
   if (timeStatus() != timeNotSet) {
     s << F(" # ") << year(t) << F("-") << month(t) << F("-") << day(t) <<
-      F(" ") << hour(t) << F(":") << minute(t) << F(":") << second(t) << endl;
+      F(" ") << hour(t) << F(":") << minute(t) << F(":") << second(t);
+    if (timeStatus() == timeNeedsSync)
+      s << F(" needs sync");
   } else {
-    s << F(" # clock not set") << endl;
+    s << F(" # not set");
   }
+  s << endl;
 }
 
 void printTimeMs(Print &s, unsigned long ms) {
@@ -175,9 +196,10 @@ void printTimeMs(Print &s, unsigned long ms) {
 #define NTP_PACKET_SIZE 48 // NTP time is in the first 48 bytes of message
 
 time_t getNtpTime() {
+  return 0;
   EthernetUDP Udp;
   Udp.begin(8888);
-  while (Udp.parsePacket() > 0) ; // discard any previously received packets
+  while (Udp.parsePacket() > 0); // discard any previously received packets
   byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
 #if defined(NTP_SERVER)
   IPAddress NTP_SERVER;
@@ -186,7 +208,7 @@ time_t getNtpTime() {
 #endif
   sendNTPpacket(Udp, packetBuffer, ntpIp);
   uint32_t beginWait = millis();
-  while (millis() - beginWait < 1500) {
+  while (millis() - beginWait < 2000) {
     int size = Udp.parsePacket();
     if (size >= NTP_PACKET_SIZE) {
       Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
@@ -274,6 +296,7 @@ void printdata(Print &s) {
 #endif
   s << F("uptime=")     << (millis() / SEC);
   printTimeMs(s, 0);
+  s << F("MCUSR=") << mcusr << endl;
 #if defined(FREEMEM)
   s << F("freemem=") << freeMemory() << endl;
 #endif
@@ -316,8 +339,8 @@ void printdata(Print &s) {
 #if defined(EXTRA3)
   s << F("extra3=")      << analogRead(EXTRA3) << endl;
 #endif
-#if defined(WEBTIME)
   s  << F("# settings") << endl;
+#if defined(WEBTIME)
   s << F("day_hh=")    << day_hh << endl;
   s << F("night_hh=")    << night_hh << endl;
 #endif
@@ -527,15 +550,14 @@ void readSensors() {
 
 
 void setup() {
-#if defined(WATCHDOG)
-  wdt_disable();
-  wdt_enable(WATCHDOG);
-#endif
+  mcusr = MCUSR;
+  MCUSR = 0;
+  WDT_INIT;
 #if defined(USE_SERIAL)
   Serial.begin(USE_SERIAL);
   Serial.setTimeout(500);
-  Serial << F("starting") << endl;
 #endif
+  PRINTLNF("STARTING");
   pinMode(UP, OUTPUT);
   turn(UP, 0);
   pinMode(DOWN, OUTPUT);
@@ -574,22 +596,15 @@ void setup() {
 #else
   Ethernet.begin(mac);
 #endif
+  PRINTLN(Ethernet.localIP());
   webserver.setDefaultCommand(&rest);
   webserver.begin();
 
 #if defined(WEBTIME)
-  setSyncProvider(getNtpTime);
+  //  setSyncProvider(getNtpTime);
   setSyncInterval(TIME_RESYNC);
 #endif
-#if defined(USE_SERIAL)
-  Serial << F("UP");
-#if defined(WEBTIME)
-  time_t t = now();
-  printTime(Serial, t);
-#else
-  Serial << endl;
-#endif
-#endif
+  PRINTLNF("UP");
 }
 
 
@@ -630,6 +645,15 @@ void loop() {
     }
   } else {
 
+#if defined(WEBTIME)
+    if (needSync()) {
+      WDT_RESET;
+      PRINTLNF("SYNCTIME");
+      syncTime(getNtpTime);
+      WDT_RESET;
+    }
+#endif
+
     // read sensors
     if (millis() - timer > 5 * SEC) {
       timer = millis();
@@ -658,7 +682,5 @@ void loop() {
     }
   }
 
-#if defined(WATCHDOG)
-  wdt_reset();
-#endif
+  WDT_RESET;
 }
