@@ -15,15 +15,14 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.6")
+#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.7")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define MIN_TIME 1446761120 // minimum valid time (UTC, secs sincs epoch) 
 #define TIMEZONE 1 // offset in hours
 //#define NTP_SERVER ntpIp(192, 168, 222, 201) // use gateway IP if undefined (*)
-#define TIME_RESYNC 300 // timeout in s after which the time is pulled from the net
+#define TIME_RESYNC 600 // timeout in s after which the time is pulled from the net
 #define WEB_PASSWD "YWRtaW46YWRtaW4=" // base64 of admin:admin
-#define WATCHDOG WDTO_8S // watchdog timeout (*)
 #define USEDHT DHT22 // type of DHT sensor (*)
 //#define FREEMEM // show free memory in (*)
 #define BUFLEN 32 // buffer size for http server
@@ -79,6 +78,7 @@
 
 
 // includes
+#include <avr/wdt.h>
 #include <SPI.h>
 #include <Ethernet.h>
 #include <WebServer.h>
@@ -88,17 +88,9 @@
 #include "state.h"
 
 #if defined(WEBTIME)
-#include "Time.h"
+#include <Time.h>
 #endif
 
-#if defined(WATCHDOG)
-#include <avr/wdt.h>
-#define WDT_INIT wdt_disable(); wdt_enable(WATCHDOG)
-#define WDT_RESET wdt_reset()
-#else
-#define WDT_INIT
-#define WDT_RESET
-#endif
 
 #if defined(USE_SERIAL)
 #define PRINT(S) Serial.print(S)
@@ -552,7 +544,7 @@ void readSensors() {
 void setup() {
   mcusr = MCUSR;
   MCUSR = 0;
-  WDT_INIT;
+  wdt_enable(WDTO_8S);
 #if defined(USE_SERIAL)
   Serial.begin(USE_SERIAL);
   Serial.setTimeout(500);
@@ -601,9 +593,10 @@ void setup() {
   webserver.begin();
 
 #if defined(WEBTIME)
-  //  setSyncProvider(getNtpTime);
+  setSyncProvider(getNtpTime);
   setSyncInterval(TIME_RESYNC);
 #endif
+
   PRINTLNF("UP");
 }
 
@@ -646,12 +639,8 @@ void loop() {
   } else {
 
 #if defined(WEBTIME)
-    if (needSync()) {
-      WDT_RESET;
-      PRINTLNF("SYNCTIME");
-      syncTime(getNtpTime);
-      WDT_RESET;
-    }
+    syncTime();
+    wdt_reset();
 #endif
 
     // read sensors
@@ -682,5 +671,5 @@ void loop() {
     }
   }
 
-  WDT_RESET;
+  wdt_reset();
 }
