@@ -15,10 +15,9 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.7")
+#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.8")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
-#define MIN_TIME 1446761120 // minimum valid time (UTC, secs sincs epoch) 
 #define TIMEZONE 1 // offset in hours
 //#define NTP_SERVER ntpIp(192, 168, 222, 201) // use gateway IP if undefined (*)
 #define TIME_RESYNC 600 // timeout in s after which the time is pulled from the net
@@ -187,9 +186,10 @@ void printTimeMs(Print &s, unsigned long ms) {
 #if defined(WEBTIME)
 #define NTP_PACKET_SIZE 48 // NTP time is in the first 48 bytes of message
 
+EthernetUDP Udp;
+
 time_t getNtpTime() {
-  return 0;
-  EthernetUDP Udp;
+  PRINTF("SYNCTIME ");
   Udp.begin(8888);
   while (Udp.parsePacket() > 0); // discard any previously received packets
   byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
@@ -200,6 +200,7 @@ time_t getNtpTime() {
 #endif
   sendNTPpacket(Udp, packetBuffer, ntpIp);
   uint32_t beginWait = millis();
+  PRINTF("t=");
   while (millis() - beginWait < 2000) {
     int size = Udp.parsePacket();
     if (size >= NTP_PACKET_SIZE) {
@@ -211,9 +212,11 @@ time_t getNtpTime() {
       secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
       secsSince1900 |= (unsigned long)packetBuffer[43];
       time_t t = secsSince1900 - 2208988800UL;
-      return t > MIN_TIME ? t + TIMEZONE * SECS_PER_HOUR : 0;
+      PRINTLN(t);
+      return t;
     }
   }
+  PRINTLN(0);
   return 0; // return 0 if unable to get the time
 }
 
@@ -638,16 +641,17 @@ void loop() {
     }
   } else {
 
-#if defined(WEBTIME)
-    syncTime();
-    wdt_reset();
-#endif
-
     // read sensors
     if (millis() - timer > 5 * SEC) {
       timer = millis();
       readSensors();
+      wdt_reset();
     }
+
+#if defined(WEBTIME)
+    syncTime();
+    wdt_reset();
+#endif
 
     if (toggle.get() && toggle.age() > SEC && toggle.changed()) {
       if (!locked || (daytime.is(DAY) && daytime.age() > day_delay * SEC) || hatch_state.is(OPEN)) {
