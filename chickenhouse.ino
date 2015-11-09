@@ -15,7 +15,7 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.8")
+#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.9")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define TIMEZONE 1 // offset in hours
@@ -213,7 +213,7 @@ time_t getNtpTime() {
       secsSince1900 |= (unsigned long)packetBuffer[43];
       time_t t = secsSince1900 - 2208988800UL;
       PRINTLN(t);
-      return t;
+      return t + TIMEZONE * SECS_PER_HOUR;
     }
   }
   PRINTLN(0);
