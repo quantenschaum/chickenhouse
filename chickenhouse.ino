@@ -15,7 +15,7 @@
 // https://github.com/quantenschaum/chickenhouse
 
 // configuration
-#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.9")
+#define VERSION F("chickenbox ") << F(__DATE__) << F(" v2.10")
 // (*) = comment out to disable the feature
 #define WEBTIME // use time (*)
 #define TIMEZONE 1 // offset in hours
@@ -654,7 +654,7 @@ void loop() {
 #endif
 
     if (toggle.get() && toggle.age() > SEC && toggle.changed()) {
-      if (!locked || (daytime.is(DAY) && daytime.age() > day_delay * SEC) || hatch_state.is(OPEN)) {
+      if ((daytime.is(DAY) && daytime.age() > day_delay * SEC) || hatch_state.is(OPEN)) {
         hatch(hatch_state.is(OPEN) ? CLOSE : OPEN);
       }
     } else {
