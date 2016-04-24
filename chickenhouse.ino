@@ -60,8 +60,8 @@
 #define DOWN         6
 #define LIGHT        5
 #define HEATER       4
-//#define EXTRA1       A4
-//#define EXTRA2       A5
+#define EXTRA1       3
+#define EXTRA2       2
 
 
 // constants
@@ -654,9 +654,7 @@ void loop() {
 #endif
 
     if (toggle.get() && toggle.age() > SEC && toggle.changed()) {
-      if ((daytime.is(DAY) && daytime.age() > day_delay * SEC) || hatch_state.is(OPEN)) {
-        hatch(hatch_state.is(OPEN) ? CLOSE : OPEN);
-      }
+      hatch(hatch_state.is(OPEN) ? CLOSE : OPEN);
     } else {
       if (daytime.age() > day_delay * SEC && daytime.changed()) {
         int hs = hatch_state.get();
